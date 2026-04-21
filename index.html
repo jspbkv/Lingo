@@ -226,6 +226,40 @@
       transition: width 0.1s linear;
     }
 
+    /* Game Over animation */
+    #gameover-anim {
+      position: fixed; inset: 0; z-index: 19;
+      display: none; align-items: center; justify-content: center;
+      pointer-events: none;
+    }
+    #gameover-anim.show { display: flex; }
+    #gameover-title {
+      font-family: 'Rajdhani', sans-serif; font-weight: 700;
+      font-size: clamp(56px, 14vw, 100px);
+      color: #ef4444;
+      text-shadow: 0 0 40px rgba(239,68,68,0.5);
+      opacity: 0;
+      transform: translateY(-80px) scale(1.3);
+      animation: go-drop 0.6s cubic-bezier(0.22,1,0.36,1) forwards;
+    }
+    @keyframes go-drop {
+      0%   { opacity: 0; transform: translateY(-80px) scale(1.3); }
+      60%  { opacity: 1; transform: translateY(10px) scale(0.95); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .go-word {
+      position: fixed; font-family: 'Inter', sans-serif; font-weight: 700;
+      font-size: clamp(14px, 3vw, 20px); pointer-events: none; z-index: 19;
+      opacity: 1;
+    }
+    .go-word.fly {
+      animation: go-fly var(--dur, 0.9s) ease-out forwards;
+    }
+    @keyframes go-fly {
+      0%   { opacity: 1; transform: translate(0,0) rotate(0deg) scale(1); }
+      100% { opacity: 0; transform: translate(var(--tx),var(--ty)) rotate(var(--rot)) scale(0.3); }
+    }
+
     /* Panels */
     .panel {
       position: fixed; inset: 0; z-index: 20;
@@ -538,7 +572,7 @@
     .rank-other { background: #cbd5e1; }
 
     .player-name {
-      font-weight: 600; color: #111827;
+      font-weight: 600; color: var(--text);
     }
     .stat-value {
       color: #2563eb; font-weight: 600;
@@ -652,8 +686,13 @@
 
 <!-- In-game leaderboard widget -->
 <div id="ig-leaderboard">
-  <div class="ig-lb-title">🏆 Топ игроков</div>
+  <div class="ig-lb-title"><svg viewBox="0 0 24 24" style="width:10px;height:10px;vertical-align:middle;margin-right:4px;fill:currentColor"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>Топ игроков</div>
   <div id="ig-lb-list"><div style="font-size:11px;color:#9ca3af;text-align:center;padding:8px 0;">Загрузка...</div></div>
+</div>
+
+<!-- Game Over animation overlay -->
+<div id="gameover-anim">
+  <div id="gameover-title">GAME OVER</div>
 </div>
 
 <!-- Level up flash -->
@@ -687,7 +726,7 @@
 <!-- ===== MENU PANEL ===== -->
 <div class="panel" id="menu-panel">
   <div class="card" style="position:relative;">
-    <button id="theme-btn" onclick="toggleTheme()" title="Сменить тему">🌙</button>
+    <button id="theme-btn" onclick="toggleTheme()" title="Сменить тему"><svg id="theme-icon" viewBox="0 0 24 24" class="icon-button" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button>
     <div class="card-title"><svg viewBox="0 0 24 24" class="icon-svg" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/></svg>Lingo.io</div>
     <div class="card-sub">Успейте напечатать слова пока они не упали</div>
 
@@ -744,8 +783,8 @@
     </div>
 
     <button class="btn-main" onclick="ensurePlayerName().then(startGame)">СТАРТ</button>
-    <button class="btn-secondary" onclick="showLeaderboard()">🏆 Лидерборд</button>
-    <button class="btn-secondary" id="sound-btn" onclick="toggleSound()">🔊 Звук включён</button>
+    <button class="btn-secondary" onclick="showLeaderboard()">Лучшие игроки</button>
+    <button class="btn-secondary" id="sound-btn" onclick="toggleSound()"><svg id="sound-icon" viewBox="0 0 24 24" class="icon-svg" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>Звук включён</button>
   </div>
 </div>
 
@@ -762,7 +801,7 @@
       <div class="stat-row"><span>Лучшее комбо</span><span id="stat-combo">×1</span></div>
     </div>
     <button class="btn-main" onclick="startGame()">ЕЩЁ РАЗ</button>
-    <button class="btn-secondary" onclick="shareResult()">🔗 Поделиться</button>
+    <button class="btn-secondary" onclick="shareResult()"><svg viewBox="0 0 24 24" class="icon-svg" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>Поделиться</button>
     <button class="btn-secondary" onclick="showMenu()">Выйти в меню</button>
   </div>
 </div>
@@ -818,7 +857,7 @@
 <div class="panel" id="leaderboard-panel" style="display:none;">
   <div class="card" style="width: min(900px, 95vw); max-height: 85vh; display: flex; flex-direction: column;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-      <div class="card-title" style="margin: 0; font-size: 32px;">🏆 Лидерборд</div>
+      <div class="card-title" style="margin: 0; font-size: 32px;">Глобальный рейтинг игроков</div>
       <button class="modal-close" onclick="hideLeaderboard()">×</button>
     </div>
     
@@ -851,7 +890,13 @@ function toggleSound() {
   soundEnabled = !soundEnabled;
   localStorage.setItem('sound', soundEnabled ? 'on' : 'off');
   const btn = document.getElementById('sound-btn');
-  if (btn) btn.textContent = soundEnabled ? '🔊 Звук включён' : '🔇 Звук выключен';
+  const icon = document.getElementById('sound-icon');
+  if (btn) btn.childNodes[1].textContent = soundEnabled ? 'Звук включён' : 'Звук выключен';
+  if (icon) {
+    icon.innerHTML = soundEnabled
+      ? '<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>'
+      : '<path d="M16.5 12A4.5 4.5 0 0 0 14 7.97v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>';
+  }
 }
 
 // ===================== PERSONAL RECORD =====================
@@ -887,8 +932,13 @@ function shareResult() {
 let isDark = localStorage.getItem('theme') === 'dark';
 function applyTheme() {
   document.body.classList.toggle('dark', isDark);
-  const btn = document.getElementById('theme-btn');
-  if (btn) btn.textContent = isDark ? '☀️' : '🌙';
+  const icon = document.getElementById('theme-icon');
+  if (icon) {
+    // Солнце (светлая тема) или луна (тёмная)
+    icon.innerHTML = isDark
+      ? '<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>'
+      : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+  }
 }
 function toggleTheme() {
   isDark = !isDark;
@@ -1192,7 +1242,7 @@ async function showPlayerStats(playerId) {
     
     let html = `<div style="margin-bottom: 20px;">
       <h2 style="margin: 0 0 4px 0; font-size: 22px; font-weight: 700;">${player.username}</h2>
-      <p style="color: #64748b; font-size: 13px; margin: 0;">Статистика игрока</p>
+      <p style="color: var(--text2); font-size: 13px; margin: 0;">Статистика игрока</p>
     </div>`;
     
     html += `
@@ -1206,14 +1256,14 @@ async function showPlayerStats(playerId) {
     
     if (games && games.length > 0) {
       html += `<div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
-        <h3 style="margin: 0 0 10px 0; font-size: 13px; font-weight: 700; color: #374151;">Последние игры</h3>`;
+        <h3 style="margin: 0 0 10px 0; font-size: 13px; font-weight: 700; color: var(--text);">Последние игры</h3>`;
       games.forEach(game => {
         const date = new Date(game.played_at).toLocaleString('ru-RU', {
           month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
         });
         const modeLabel = { survival: 'Выживание', timer60: '60 сек', timer120: '120 сек' }[game.mode] || game.mode;
-        html += `<div style="padding: 7px 0; font-size: 12px; color: #64748b; border-bottom: 1px solid #f1f5f9;">
-          <span style="font-weight:700;color:#111827;">${(game.score||0).toLocaleString()}</span> очков
+        html += `<div style="padding: 7px 0; font-size: 12px; color: var(--text2); border-bottom: 1px solid var(--border);">
+          <span style="font-weight:700;color:var(--text);">${(game.score||0).toLocaleString()}</span> очков
           &nbsp;·&nbsp;${game.accuracy||0}%
           &nbsp;·&nbsp;×${game.max_combo||1} комбо
           &nbsp;·&nbsp;${modeLabel}
@@ -1831,6 +1881,52 @@ function startTimer(seconds) {
   }, 1000);
 }
 
+// ===================== GAME OVER ANIMATION =====================
+function playGameOverAnim(callback) {
+  const overlay = document.getElementById('gameover-anim');
+  const title = document.getElementById('gameover-title');
+  overlay.classList.add('show');
+
+  // Сбрасываем анимацию заголовка
+  title.style.animation = 'none';
+  void title.offsetWidth;
+  title.style.animation = 'go-drop 0.6s cubic-bezier(0.22,1,0.36,1) forwards';
+
+  // Слова для разлёта
+  const words = ['ERROR','FAIL','MISS','DEAD','OOPS','LOST','NOPE','GONE'];
+  const colors = ['#ef4444','#f97316','#eab308','#8b5cf6','#3b82f6','#ec4899'];
+  const cx = window.innerWidth / 2;
+  const cy = window.innerHeight / 2;
+
+  for (let i = 0; i < 10; i++) {
+    const el = document.createElement('div');
+    el.className = 'go-word';
+    el.textContent = words[i % words.length];
+    el.style.color = colors[i % colors.length];
+    el.style.left = (cx + (Math.random() - 0.5) * 300) + 'px';
+    el.style.top  = (cy + (Math.random() - 0.5) * 200) + 'px';
+    const angle = (Math.random() * 360);
+    const dist  = 180 + Math.random() * 220;
+    const tx = Math.cos(angle * Math.PI / 180) * dist;
+    const ty = Math.sin(angle * Math.PI / 180) * dist;
+    const rot = (Math.random() - 0.5) * 720;
+    const dur = 0.7 + Math.random() * 0.5;
+    el.style.setProperty('--tx', tx + 'px');
+    el.style.setProperty('--ty', ty + 'px');
+    el.style.setProperty('--rot', rot + 'deg');
+    el.style.setProperty('--dur', dur + 's');
+    document.body.appendChild(el);
+    setTimeout(() => el.classList.add('fly'), 80 + i * 40);
+    setTimeout(() => el.remove(), (dur + 0.2 + i * 0.04) * 1000);
+  }
+
+  // Через 1.8с скрываем и показываем панель
+  setTimeout(() => {
+    overlay.classList.remove('show');
+    callback();
+  }, 1800);
+}
+
 // ===================== COUNTDOWN =====================
 function runCountdown(callback) {
   const overlay = document.getElementById('countdown-overlay');
@@ -1952,14 +2048,19 @@ function endGame() {
 
   // Update local record
   const isNewRecord = updateLocalRecord(gameState.score);
-  if (isNewRecord && gameState.score > 0) showToast('🏆 Новый рекорд!', '#f59e0b');
+  if (isNewRecord && gameState.score > 0) showToast('Новый рекорд!', '#f59e0b');
 
   // Save to Supabase if configured
   if (window.supabaseClient) {
     saveScoreToSupabase();
   }
 
-  document.getElementById('gameover-panel').style.display = 'flex';
+  const showPanel = () => { document.getElementById('gameover-panel').style.display = 'flex'; };
+  if (settings.mode === 'survival' && gameState.lives <= 0) {
+    playGameOverAnim(showPanel);
+  } else {
+    showPanel();
+  }
 }
 
 // ===================== PAUSE =====================
@@ -2069,7 +2170,11 @@ document.addEventListener('DOMContentLoaded', () => {
   applyTheme();
   updateRecordDisplay();
   const sBtn = document.getElementById('sound-btn');
-  if (sBtn) sBtn.textContent = soundEnabled ? '🔊 Звук включён' : '🔇 Звук выключен';
+  if (sBtn) {
+    const icon = document.getElementById('sound-icon');
+    if (icon) icon.innerHTML = soundEnabled ? '<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>' : '<path d="M16.5 12A4.5 4.5 0 0 0 14 7.97v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>';
+    sBtn.childNodes[1].textContent = soundEnabled ? 'Звук включён' : 'Звук выключен';
+  }
   
   // Initialize Supabase with delay to ensure library is loaded
   setTimeout(() => {
