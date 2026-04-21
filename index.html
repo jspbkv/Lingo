@@ -122,6 +122,41 @@
       100% { background: transparent; }
     }
 
+    /* Level up flash */
+    #levelup-flash {
+      position: fixed; inset: 0; z-index: 8; pointer-events: none;
+      opacity: 0;
+    }
+    #levelup-flash.active {
+      animation: levelup-flash 1s ease-out forwards;
+    }
+    @keyframes levelup-flash {
+      0%   { opacity: 0.18; }
+      100% { opacity: 0; }
+    }
+
+    /* Countdown overlay */
+    #countdown-overlay {
+      position: fixed; inset: 0; z-index: 25;
+      display: none; align-items: center; justify-content: center;
+      background: var(--panel-bg); backdrop-filter: blur(8px);
+    }
+    #countdown-overlay.show { display: flex; }
+    #countdown-number {
+      font-family: 'Rajdhani', sans-serif; font-weight: 700;
+      font-size: clamp(100px, 25vw, 180px);
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text; line-height: 1;
+      animation: countdown-pop 0.9s ease-out forwards;
+    }
+    @keyframes countdown-pop {
+      0%   { transform: scale(1.4); opacity: 0; }
+      20%  { transform: scale(1);   opacity: 1; }
+      70%  { transform: scale(1);   opacity: 1; }
+      100% { transform: scale(0.6); opacity: 0; }
+    }
+
     /* Bottom danger zone */
     .danger-zone {
       position: absolute; bottom: 0; left: 0; right: 0;
@@ -542,6 +577,14 @@
   <div id="ig-lb-list"><div style="font-size:11px;color:#9ca3af;text-align:center;padding:8px 0;">Загрузка...</div></div>
 </div>
 
+<!-- Level up flash -->
+<div id="levelup-flash"></div>
+
+<!-- Countdown overlay -->
+<div id="countdown-overlay">
+  <div id="countdown-number">3</div>
+</div>
+
 <!-- Pause button -->
 <button id="pause-btn" onclick="togglePause()" aria-label="Пауза"><svg viewBox="0 0 24 24" class="icon-button" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.5"/><rect x="14" y="5" width="4" height="14" rx="1.5"/></svg></button>
 
@@ -638,8 +681,8 @@
       <div class="stat-row"><span>Точность</span><span id="stat-acc">0%</span></div>
       <div class="stat-row"><span>Лучшее комбо</span><span id="stat-combo">×1</span></div>
     </div>
-    <button class="btn-main" onclick="startGame()">ЕЩЁРАЗ</button>
-    <button class="btn-secondary" onclick="showMenu()">Настройки</button>
+    <button class="btn-main" onclick="startGame()">ЕЩЁ РАЗ</button>
+    <button class="btn-secondary" onclick="showMenu()">Выйти в меню</button>
   </div>
 </div>
 
@@ -1225,6 +1268,17 @@ function checkSpeedLevel() {
     if (level > 0) {
       showToast(`⚡ Уровень ${level} — быстрее!`, '#6366f1');
       playSound('levelup');
+      // Цвет вспышки меняется в зависимости от уровня
+      const colors = [
+        '#6366f1','#8b5cf6','#a855f7','#ec4899',
+        '#f97316','#ef4444','#f59e0b','#10b981',
+        '#06b6d4','#3b82f6'
+      ];
+      const flash = document.getElementById('levelup-flash');
+      flash.style.background = colors[level - 1];
+      flash.classList.remove('active');
+      void flash.offsetWidth; // reflow
+      flash.classList.add('active');
     }
   }
 }
@@ -1656,17 +1710,42 @@ function startTimer(seconds) {
   }, 1000);
 }
 
+// ===================== COUNTDOWN =====================
+function runCountdown(callback) {
+  const overlay = document.getElementById('countdown-overlay');
+  const numEl   = document.getElementById('countdown-number');
+  overlay.classList.add('show');
+  let count = 3;
+
+  function tick() {
+    numEl.textContent = count;
+    numEl.style.animation = 'none';
+    void numEl.offsetWidth;
+    numEl.style.animation = 'countdown-pop 0.9s ease-out forwards';
+    if (count === 0) {
+      setTimeout(() => {
+        overlay.classList.remove('show');
+        callback();
+      }, 600);
+      return;
+    }
+    count--;
+    setTimeout(tick, 900);
+  }
+  tick();
+}
+
 // ===================== START GAME =====================
 function startGame() {
   // Reset state
   gameState = {
-    active: true, paused: false,
+    active: false, paused: false,
     score: 0, combo: 1, maxCombo: 1,
     lives: settings.lives === 999 ? 999 : parseInt(settings.lives),
     typedCount: 0, missedCount: 0,
     timeLeft: 60, words: [], nextWordId: 0,
     lastSpawnTime: 0, animFrame: null, timerInterval: null,
-    currentTarget: null, startTime: Date.now()
+    currentTarget: null, startTime: 0
   };
   lastSpeedLevel = 0;
   if (settings.lives === '3') gameState.lives = 3;
@@ -1681,41 +1760,46 @@ function startGame() {
   // Clear old words
   document.getElementById('game-canvas').querySelectorAll('.falling-word').forEach(e => e.remove());
 
-  // Show game UI
+  // Show game UI (but not input yet)
   document.getElementById('hud').style.display = 'flex';
-  document.getElementById('input-area').style.display = 'block';
-  document.getElementById('pause-btn').classList.add('visible');
-  document.getElementById('settings-fab').classList.add('visible');
-  document.getElementById('combo-bar').classList.add('visible');
-  document.getElementById('ig-leaderboard').classList.add('visible');
-  loadIgLeaderboard();
+  document.getElementById('input-area').style.display = 'none';
+  document.getElementById('pause-btn').classList.remove('visible');
+  document.getElementById('settings-fab').classList.remove('visible');
+  document.getElementById('combo-bar').classList.remove('visible');
+  document.getElementById('ig-leaderboard').classList.remove('visible');
   document.getElementById('timer-bar-container').style.display = 'none';
   document.getElementById('hud-time-wrap').style.display = 'none';
-
-  // Reset timer bar
-  const bar = document.getElementById('timer-bar');
-  bar.style.background = 'linear-gradient(90deg, #3b82f6, #10b981)';
-  bar.style.boxShadow = 'none';
 
   updateScore();
   updateLives();
   updateCombo();
 
-  // Focus input
-  document.getElementById('word-input').value = '';
-  document.getElementById('word-input').focus();
+  runCountdown(() => {
+    gameState.active = true;
+    gameState.startTime = Date.now();
 
-  // Timer mode
-  if (settings.mode === 'timer60') startTimer(60);
-  else if (settings.mode === 'timer120') startTimer(120);
+    document.getElementById('input-area').style.display = 'block';
+    document.getElementById('pause-btn').classList.add('visible');
+    document.getElementById('settings-fab').classList.add('visible');
+    document.getElementById('combo-bar').classList.add('visible');
+    document.getElementById('ig-leaderboard').classList.add('visible');
+    loadIgLeaderboard();
 
-  // Start spawn & loop
-  gameState.lastSpawnTime = performance.now();
-  lastTimestamp = performance.now();
-  gameState.animFrame = requestAnimationFrame(gameLoop);
+    const bar = document.getElementById('timer-bar');
+    bar.style.background = 'linear-gradient(90deg, #3b82f6, #10b981)';
+    bar.style.boxShadow = 'none';
 
-  // First word immediately
-  setTimeout(spawnWord, 500);
+    document.getElementById('word-input').value = '';
+    document.getElementById('word-input').focus();
+
+    if (settings.mode === 'timer60') startTimer(60);
+    else if (settings.mode === 'timer120') startTimer(120);
+
+    gameState.lastSpawnTime = performance.now();
+    lastTimestamp = performance.now();
+    gameState.animFrame = requestAnimationFrame(gameLoop);
+    setTimeout(spawnWord, 300);
+  });
 }
 
 // ===================== END GAME =====================
