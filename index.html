@@ -1,0 +1,1903 @@
+<!DOCTYPE html><html lang="ru"><head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Lingo.io</title>
+  <meta property="og:title" content="Lingo.io — Игра на печать"/>
+  <meta property="og:description" content="Печатайте падающие слова на русском, английском и кыргызском языках до того, как они упадут!"/>
+  <meta property="og:url" content="https://www.onspace.ai"/>
+  <meta property="og:type" content="website"/>
+  <meta property="og:site_name" content="OnSpace.AI"/>
+  <meta property="og:image" content="https://cdn-ai.onspace.ai/onspace/project/screenshot/online/pre-site/9b6jk6.jpg"/>
+  <meta property="og:image:width" content="1200"/>
+  <meta property="og:image:height" content="630"/>
+  <meta name="twitter:card" content="summary_large_image"/>
+  <meta name="twitter:title" content="Lingo.io — Игра на печать"/>
+  <meta name="twitter:description" content="Печатайте падающие слова на русском, английском и кыргызском!"/>
+  <meta name="twitter:image" content="https://cdn-ai.onspace.ai/onspace/project/screenshot/online/pre-site/9b6jk6.jpg"/>
+  <meta name="twitter:url" content="https://www.onspace.ai"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg: #ffffff; --bg2: #f9fafb; --bg3: #f3f4f6;
+      --border: #e5e7eb; --border2: #d1d5db;
+      --text: #333333; --text2: #6b7280; --text3: #94a3b8;
+      --card-bg: #ffffff; --panel-bg: rgba(255,255,255,0.9);
+      --hud-bg: rgba(255,255,255,0.9); --input-bg: rgba(255,255,255,0.95);
+      --input-field: #ffffff; --modal-bg: white;
+      --lb-head: #f3f4f6; --lb-hover: #f9fafb;
+      --word-color: #333333;
+    }
+    body.dark {
+      --bg: #0f172a; --bg2: #1e293b; --bg3: #334155;
+      --border: #334155; --border2: #475569;
+      --text: #e2e8f0; --text2: #94a3b8; --text3: #64748b;
+      --card-bg: #1e293b; --panel-bg: rgba(15,23,42,0.92);
+      --hud-bg: rgba(15,23,42,0.92); --input-bg: rgba(15,23,42,0.97);
+      --input-field: #1e293b; --modal-bg: #1e293b;
+      --lb-head: #0f172a; --lb-hover: #0f172a;
+      --word-color: #e2e8f0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+      height: 100dvh;
+      width: 100vw;
+      transition: background 0.3s, color 0.3s;
+    }
+    .icon-svg {
+      width: 1em;
+      height: 1em;
+      vertical-align: middle;
+      fill: currentColor;
+      display: inline-block;
+      margin-right: 0.35em;
+    }
+    .icon-button {
+      width: 1.2em;
+      height: 1.2em;
+      vertical-align: middle;
+      fill: currentColor;
+      display: inline-block;
+    }
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: var(--bg3); }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+
+
+    /* Game canvas area */
+    #game-canvas {
+      position: absolute; inset: 0; z-index: 1; pointer-events: none;
+      overflow: hidden;
+    }
+
+    /* Falling word */
+    .falling-word {
+      position: absolute;
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      white-space: nowrap;
+      user-select: none;
+      transition: none;
+      will-change: transform;
+    }
+    .falling-word .char-typed { color: #28a745; }
+    .falling-word .char-untyped { color: var(--word-color); }
+    .falling-word.word-active .char-untyped { color: var(--word-color); }
+    .lang-badge {
+      font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
+      padding: 1px 5px; border-radius: 4px; margin-left: 5px;
+      vertical-align: middle; opacity: 0.75;
+    }
+    .badge-en { background: #007bff; color: #ffffff; border: 1px solid #007bff; }
+    .badge-ru { background: #6f42c1; color: #ffffff; border: 1px solid #6f42c1; }
+    .badge-kg { background: #ffc107; color: #000000; border: 1px solid #ffc107; }
+
+    /* Danger pulse when near bottom */
+    .falling-word.word-danger { animation: danger-pulse 0.5s infinite alternate; }
+    @keyframes danger-pulse {
+      from { color: #dc3545; }
+      to   { color: #ff0000; }
+    }
+
+    /* Word explode effect */
+    .word-explode { animation: explode 0.35s ease-out forwards; pointer-events: none; }
+    @keyframes explode {
+      0%   { opacity: 1; transform: translateX(0) scale(1); }
+      50%  { opacity: 0.8; transform: translateX(0) scale(1.3); }
+      100% { opacity: 0; transform: translateX(0) scale(0); }
+    }
+
+    /* Miss effect */
+    .miss-flash { animation: miss 0.4s ease-out forwards; }
+    @keyframes miss {
+      0%   { background: rgba(220,53,69,0.2); }
+      100% { background: transparent; }
+    }
+
+    /* Bottom danger zone */
+    .danger-zone {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      height: 80px; z-index: 1; pointer-events: none;
+      background: linear-gradient(transparent, rgba(220,53,69,0.1));
+    }
+    .danger-line {
+      position: absolute; bottom: 80px; left: 0; right: 0;
+      height: 2px; background: #dc3545;
+    }
+
+    /* Input area */
+    #input-area {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 10;
+      padding: 12px 16px 16px;
+      background: var(--input-bg);
+    }
+    #word-input {
+      width: 100%; background: var(--input-field);
+      border: 2px solid var(--border2);
+      border-radius: 8px; color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: clamp(16px, 3vw, 22px);
+      padding: 12px 18px; outline: none;
+      transition: border-color 0.2s;
+    }
+    #word-input:focus {
+      border-color: #007bff;
+    }
+    #word-input.input-match {
+      border-color: #28a745;
+    }
+    #word-input.input-error {
+      border-color: #dc3545;
+      animation: shake 0.3s ease-out;
+    }
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      25% { transform: translateX(-6px); }
+      75% { transform: translateX(6px); }
+    }
+
+    /* HUD */
+    #hud {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; padding-right: 65px;
+      background: var(--hud-bg);
+    }
+    .hud-stat { text-align: center; }
+    .hud-label { font-size: 10px; letter-spacing: 0.12em; color: var(--text2); text-transform: uppercase; }
+    .hud-value { font-family: 'Inter', sans-serif; font-size: clamp(20px, 4vw, 30px); font-weight: 700; line-height: 1; }
+    .hud-score { color: #007bff; }
+    .hud-lives { color: #dc3545; }
+    .hud-time  { color: #6f42c1; }
+    .hud-combo { color: #ffc107; }
+
+    /* Timer bar */
+    #timer-bar-container {
+      position: fixed; top: 60px; left: 0; right: 0; z-index: 10;
+      height: 3px; background: var(--border);
+      display: none;
+    }
+    #timer-bar {
+      height: 100%; background: linear-gradient(90deg, #007bff, #28a745);
+      transition: width 0.1s linear;
+    }
+
+    /* Panels */
+    .panel {
+      position: fixed; inset: 0; z-index: 20;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--panel-bg); backdrop-filter: blur(10px);
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: clamp(24px,5vw,40px) clamp(20px,5vw,48px);
+      width: min(500px, 95vw);
+      box-shadow: 0 20px 40px rgba(15,23,42,0.08);
+    }
+    .card-title {
+      font-family: 'Rajdhani', sans-serif; font-weight: 700;
+      font-size: clamp(28px,6vw,40px); letter-spacing: -0.01em;
+      color: var(--text);
+      text-align: center; margin-bottom: 8px;
+    }
+    .card-sub { text-align: center; color: var(--text2); font-size: 14px; margin-bottom: 28px; }
+
+    /* Settings */
+    .setting-group { margin-bottom: 20px; }
+    .setting-label { font-size: 11px; letter-spacing: 0.1em; color: var(--text3); text-transform: uppercase; margin-bottom: 8px; display: block; }
+    .btn-group { display: flex; gap: 6px; flex-wrap: wrap; }
+    .btn-opt {
+      flex: 1; min-width: 60px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border2); cursor: pointer;
+      font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600;
+      background: var(--bg2); color: var(--text);
+      transition: all 0.18s; letter-spacing: 0.02em;
+    }
+    .btn-opt:hover { background: var(--bg3); }
+    .btn-opt.active {
+      background: #eef2ff; color: #3730a3;
+      border-color: #c7d2fe;
+    }
+    .btn-opt.active-purple {
+      background: #eef2ff; color: #4338ca;
+      border-color: #c7d2fe;
+    }
+    .btn-opt.active-green {
+      background: #ecfdf5; color: #166534;
+      border-color: #a7f3d0;
+    }
+    .btn-opt.active-yellow {
+      background: #fef9c3; color: #92400e;
+      border-color: #fde68a;
+    }
+    .btn-opt.active-pink {
+      background: #fce7f3; color: #be185d;
+      border-color: #f9a8d4;
+    }
+
+    /* Language toggles */
+    .lang-toggle {
+      flex: 1; min-width: 80px; padding: 10px 8px; border-radius: 12px; border: 1px solid var(--border2); cursor: pointer;
+      font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 700;
+      background: var(--bg2); color: var(--text);
+      transition: all 0.18s; text-align: center;
+    }
+    .lang-toggle:hover { background: var(--bg3); }
+    .lang-toggle.active-en {
+      background: #dbeafe; color: #1d4ed8;
+      border-color: #bfdbfe;
+    }
+    .lang-toggle.active-ru {
+      background: #ede9fe; color: #4f46e5;
+      border-color: #ddd6fe;
+    }
+    .lang-toggle.active-kg {
+      background: #fef3c7; color: #92400e;
+      border-color: #fde68a;
+    }
+
+    /* Main buttons */
+    .btn-main {
+      width: 100%; padding: 14px; border-radius: 14px; border: none; cursor: pointer;
+      font-family: 'Inter', sans-serif; font-size: 18px; font-weight: 700; letter-spacing: 0.05em;
+      background: #2563eb;
+      color: white; margin-top: 6px;
+      box-shadow: 0 16px 32px rgba(37,99,235,0.18);
+      transition: all 0.2s; text-transform: uppercase;
+    }
+    .btn-main:hover { transform: translateY(-1px); background: #1d4ed8; }
+    .btn-main:active { transform: translateY(0); }
+    .btn-secondary {
+      width: 100%; padding: 12px; border-radius: 14px; border: 1px solid var(--border2); cursor: pointer;
+      font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600;
+      background: var(--bg2); color: var(--text);
+      transition: all 0.2s; margin-top: 8px;
+    }
+    .btn-secondary:hover { background: var(--bg3); }
+    .btn-secondary:active { transform: translateY(0); }
+
+    /* Score display */
+    .score-big {
+      font-family: 'Rajdhani', sans-serif; font-weight: 700;
+      font-size: clamp(48px,12vw,80px);
+      background: linear-gradient(135deg, #38bdf8, #818cf8);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text; text-align: center; line-height: 1;
+    }
+    .stat-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .stat-row:last-child { border-bottom: none; }
+    .stat-row span:first-child { color: var(--text2); }
+    .stat-row span:last-child { color: var(--text); font-weight: 600; }
+
+    /* Floating score popups */
+    .score-popup {
+      position: absolute; font-family: 'Rajdhani', sans-serif; font-weight: 700;
+      font-size: 22px; pointer-events: none; z-index: 5;
+      animation: score-float 0.9s ease-out forwards;
+    }
+    @keyframes score-float {
+      0%   { opacity: 1; transform: translateY(0) scale(1); }
+      100% { opacity: 0; transform: translateY(-50px) scale(1.3); }
+    }
+
+    /* Notification toast */
+    #toast {
+      position: fixed; top: 70px; left: 50%; transform: translateX(-50%);
+      z-index: 30; font-size: 14px; font-weight: 600; padding: 8px 20px;
+      border-radius: 100px; pointer-events: none; opacity: 0;
+      transition: opacity 0.2s; white-space: nowrap;
+      font-family: 'Inter', sans-serif;
+    }
+    #toast.show { opacity: 1; }
+
+    /* Pause overlay */
+    #pause-btn {
+      position: fixed; top: 12px; right: 16px; z-index: 15;
+      background: var(--card-bg); border: 1px solid var(--border2);
+      color: var(--text); width: 40px; height: 40px; border-radius: 12px;
+      display: none; align-items: center; justify-content: center; cursor: pointer;
+      font-size: 16px; transition: all 0.2s; box-shadow: 0 12px 24px rgba(15,23,42,0.08);
+    }
+    #pause-btn:hover { background: var(--bg3); }
+    #pause-btn.visible { display: flex; }
+
+    /* Combo indicator */
+    #combo-bar {
+      position: fixed; bottom: 90px; right: 60px;
+      z-index: 10; display: none; align-items: center; gap: 4px;
+    }
+    #combo-bar.visible { display: flex; }
+    .combo-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: rgba(71,85,105,0.3); transition: all 0.15s;
+    }
+    .combo-dot.lit { background: #f59e0b; box-shadow: 0 4px 12px rgba(245,158,11,0.16); }
+
+    /* In-game leaderboard widget */
+    #ig-leaderboard {
+      position: fixed; top: 70px; right: 12px; z-index: 9;
+      width: 180px; display: none; flex-direction: column;
+      background: var(--card-bg); backdrop-filter: blur(8px);
+      border: 1px solid var(--border); border-radius: 14px;
+      padding: 10px; box-shadow: 0 4px 16px rgba(15,23,42,0.08);
+    }
+    #ig-leaderboard.visible { display: flex; }
+    .ig-lb-title {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+      color: #94a3b8; text-transform: uppercase; margin-bottom: 8px;
+    }
+    .ig-lb-row {
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 0; border-bottom: 1px solid var(--border);
+      font-size: 11px;
+    }
+    .ig-lb-row:last-child { border-bottom: none; }
+    .ig-lb-rank {
+      font-weight: 700; color: #94a3b8; width: 14px; text-align: center; flex-shrink: 0;
+    }
+    .ig-lb-rank.gold   { color: #f59e0b; }
+    .ig-lb-rank.silver { color: #9ca3af; }
+    .ig-lb-rank.bronze { color: #d97706; }
+    .ig-lb-name {
+      flex: 1; font-weight: 600; color: var(--text);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .ig-lb-name.me { color: #2563eb; }
+    .ig-lb-score { font-weight: 700; color: #2563eb; font-size: 11px; flex-shrink: 0; }
+
+    /* Settings within game */
+    #settings-fab {
+      position: fixed; bottom: 90px; right: 12px; z-index: 10;
+      width: 44px; height: 44px; border-radius: 14px;
+      background: var(--card-bg); border: 1px solid var(--border2);
+      color: var(--text); display: none; align-items: center; justify-content: center;
+      cursor: pointer; font-size: 18px; transition: all 0.2s;
+      box-shadow: 0 12px 24px rgba(15,23,42,0.08);
+    }
+    #settings-fab.visible { display: flex; }
+    #settings-fab:hover { background: var(--bg3); }
+
+    /* responsive game font */
+    @media (max-width: 480px) {
+      .falling-word { font-size: 16px !important; }
+      #hud { padding: 8px 12px; }
+    }
+    @media (min-width: 768px) {
+      .falling-word { font-size: 22px !important; }
+    }
+
+    /* Leaderboard styles */
+    .leaderboard-table {
+      width: 100%; border-collapse: collapse;
+      font-size: 13px;
+    }
+    .leaderboard-table thead {
+      background: var(--lb-head); border-bottom: 2px solid var(--border2);
+    }
+    .leaderboard-table th {
+      padding: 10px; text-align: left; font-weight: 700;
+      color: var(--text2); text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em;
+    }
+    .leaderboard-table td {
+      padding: 12px 10px; border-bottom: 1px solid var(--border);
+      text-align: left; color: var(--text);
+    }
+    .leaderboard-table tr:hover {
+      background: var(--lb-hover);
+    }
+    .rank-badge {
+      display: inline-block; width: 24px; height: 24px;
+      border-radius: 50%; text-align: center; line-height: 24px;
+      font-weight: 700; font-size: 12px; color: white;
+    }
+    .rank-1 { background: linear-gradient(135deg, #fbbf24, #f59e0b); }
+    .rank-2 { background: linear-gradient(135deg, #d1d5db, #9ca3af); }
+    .rank-3 { background: linear-gradient(135deg, #d97706, #b45309); }
+    .rank-other { background: #cbd5e1; }
+
+    .player-name {
+      font-weight: 600; color: #111827;
+    }
+    .stat-value {
+      color: #2563eb; font-weight: 600;
+    }
+    .leaderboard-loading {
+      text-align: center; padding: 40px 20px;
+      color: #9ca3af;
+    }
+    .leaderboard-tabs {
+      display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 2px solid var(--border);
+    }
+    .leaderboard-tab {
+      padding: 8px 16px; border: none; background: transparent;
+      cursor: pointer; font-weight: 600; color: var(--text2);
+      border-bottom: 2px solid transparent; margin-bottom: -2px;
+      font-size: 13px; transition: all 0.2s;
+    }
+    .leaderboard-tab.active {
+      color: #2563eb; border-bottom-color: #2563eb;
+    }
+    .leaderboard-tab:hover {
+      color: #2563eb;
+    }
+
+    /* Player stats modal */
+    .modal-overlay {
+      position: fixed; inset: 0; z-index: 25;
+      background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
+      display: none; align-items: center; justify-content: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal-content {
+      background: var(--modal-bg); border-radius: 16px;
+      padding: 24px; width: min(500px, 95vw);
+      box-shadow: 0 25px 50px rgba(15,23,42,0.15);
+      border: 1px solid var(--border);
+    }
+    .modal-close {
+      float: right; background: none; border: none;
+      font-size: 24px; cursor: pointer; color: var(--text2);
+      padding: 0; width: 32px; height: 32px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .modal-close:hover { color: var(--text); }
+    .player-stat-row {
+      display: flex; justify-content: space-between; padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .player-stat-label {
+      color: var(--text2); font-size: 13px;
+    }
+    .player-stat-value {
+      color: var(--text); font-weight: 600; font-size: 14px;
+    }
+
+    /* Player name input */
+    #player-name-input {
+      width: 100%; padding: 12px; border: 2px solid var(--border2);
+      border-radius: 8px; font-family: 'Inter', sans-serif;
+      font-size: 14px; margin-bottom: 12px;
+      background: var(--input-field); color: var(--text);
+    }
+    #player-name-input:focus {
+      outline: none; border-color: #2563eb;
+    }
+
+    /* Theme toggle button */
+    #theme-btn {
+      position: absolute; top: clamp(24px,5vw,40px); right: clamp(20px,5vw,48px);
+      background: var(--bg2); border: 1px solid var(--border2);
+      color: var(--text); width: 36px; height: 36px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; font-size: 18px; transition: all 0.2s;
+    }
+    #theme-btn:hover { background: var(--bg3); }
+  </style>
+</head>
+<body>
+
+<!-- HUD -->
+<div id="hud" style="display:none;">
+  <div class="hud-stat">
+    <div class="hud-label">Счёт</div>
+    <div class="hud-value hud-score" id="score-display">0</div>
+  </div>
+  <div class="hud-stat">
+    <div class="hud-label">Жизни</div>
+    <div class="hud-value hud-lives" id="lives-display">❤❤❤</div>
+  </div>
+  <div class="hud-stat" id="hud-time-wrap" style="display:none;">
+    <div class="hud-label">Время</div>
+    <div class="hud-value hud-time" id="time-display">60</div>
+  </div>
+</div>
+
+<!-- Timer bar -->
+<div id="timer-bar-container">
+  <div id="timer-bar" style="width:100%;"></div>
+</div>
+
+<!-- Combo dots -->
+<div id="combo-bar">
+  <span id="combo-display" style="font-family:'Inter',sans-serif;font-weight:700;font-size:14px;color:#f59e0b;margin-right:4px;">×1</span>
+  <div class="combo-dot" id="cd0"></div>
+  <div class="combo-dot" id="cd1"></div>
+  <div class="combo-dot" id="cd2"></div>
+  <div class="combo-dot" id="cd3"></div>
+  <div class="combo-dot" id="cd4"></div>
+</div>
+
+<!-- In-game leaderboard widget -->
+<div id="ig-leaderboard">
+  <div class="ig-lb-title">🏆 Топ игроков</div>
+  <div id="ig-lb-list"><div style="font-size:11px;color:#9ca3af;text-align:center;padding:8px 0;">Загрузка...</div></div>
+</div>
+
+<!-- Pause button -->
+<button id="pause-btn" onclick="togglePause()" aria-label="Пауза"><svg viewBox="0 0 24 24" class="icon-button" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.5"/><rect x="14" y="5" width="4" height="14" rx="1.5"/></svg></button>
+
+<!-- Settings FAB -->
+<button id="settings-fab" onclick="openSettings()" aria-label="Настройки"><svg viewBox="0 0 24 24" class="icon-button" aria-hidden="true"><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M12 1v3m0 16v3M4.22 4.22l2.12 2.12m11.32 11.32l2.12 2.12M1 12h3m16 0h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><circle cx="12" cy="12" r="6" stroke="currentColor" stroke-width="1.5" fill="none"/></svg></button>
+
+<!-- Game area -->
+<div id="game-canvas">
+  <div class="danger-zone"></div>
+  <div class="danger-line"></div>
+</div>
+
+<!-- Input -->
+<div id="input-area" style="display:none;">
+  <input id="word-input" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Начните печатать..."/>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- ===== MENU PANEL ===== -->
+<div class="panel" id="menu-panel">
+  <div class="card" style="position:relative;">
+    <button id="theme-btn" onclick="toggleTheme()" title="Сменить тему">🌙</button>
+    <div class="card-title"><svg viewBox="0 0 24 24" class="icon-svg" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/></svg>Lingo.io</div>
+    <div class="card-sub">Успейте напечатать слова до падения</div>
+
+    <!-- Language -->
+    <div class="setting-group">
+      <span class="setting-label"><svg viewBox="0 0 24 24" class="icon-svg" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none"/><path d="M3 12h18M12 3c2.5 2.5 2.5 6.5 0 9.5M12 21c2.5-2.5 2.5-6.5 0-9.5" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>ВЫБОР СЛОВ</span>
+      <div class="btn-group">
+        <button class="lang-toggle active-en" id="lang-en" onclick="toggleLang('en')">EN</button>
+        <button class="lang-toggle active-ru" id="lang-ru" onclick="toggleLang('ru')">RU</button>
+        <button class="lang-toggle active-kg" id="lang-kg" onclick="toggleLang('kg')">KG</button>
+      </div>
+    </div>
+
+    <!-- Difficulty / Speed -->
+    <div class="setting-group">
+      <span class="setting-label"><svg viewBox="0 0 24 24" class="icon-svg" aria-hidden="true"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z"/></svg>Скорость падения</span>
+      <div class="btn-group" id="speed-group">
+        <button class="btn-opt active" data-val="slow" onclick="setOpt('speed',this)">Лёгкая</button>
+        <button class="btn-opt" data-val="normal" onclick="setOpt('speed',this)">Средняя</button>
+        <button class="btn-opt" data-val="fast" onclick="setOpt('speed',this)">Быстрая</button>
+      </div>
+    </div>
+
+    <!-- Word length -->
+    <div class="setting-group">
+      <span class="setting-label"><svg viewBox="0 0 24 24" class="icon-svg" aria-hidden="true"><path d="M4 20 20 4" stroke="currentColor" stroke-width="2"/><path d="M7 4h3M4 7v3" stroke="currentColor" stroke-width="2"/><circle cx="16" cy="16" r="3" stroke="currentColor" stroke-width="2" fill="none"/></svg>Длина слов</span>
+      <div class="btn-group" id="len-group">
+        <button class="btn-opt active-purple active" data-val="short" onclick="setOpt('len',this)">Короткие</button>
+        <button class="btn-opt" data-val="medium" onclick="setOpt('len',this)">Средние</button>
+        <button class="btn-opt" data-val="long" onclick="setOpt('len',this)">Длинные</button>
+        <button class="btn-opt" data-val="mix" onclick="setOpt('len',this)">MIX</button>
+      </div>
+    </div>
+
+    <!-- Mode: timer -->
+    <div class="setting-group">
+      <span class="setting-label"><svg viewBox="0 0 24 24" class="icon-svg" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="2" fill="none"/><path d="M12 6v6h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Режим игры</span>
+      <div class="btn-group" id="mode-group">
+        <button class="btn-opt active-green active" data-val="survival" onclick="setOpt('mode',this)">На выживание</button>
+        <button class="btn-opt" data-val="timer60" onclick="setOpt('mode',this)">60 сек</button>
+        <button class="btn-opt" data-val="timer120" onclick="setOpt('mode',this)">120 сек</button>
+      </div>
+    </div>
+
+    <!-- Lives -->
+    <div class="setting-group">
+      <span class="setting-label"><svg viewBox="0 0 24 24" class="icon-svg" aria-hidden="true"><path d="M12 21s-7-4.35-9-10C1 6 4 3 7.5 3 9.24 3 11 4.2 12 5.44 13 4.2 14.76 3 16.5 3 20 3 23 6 21 11c-2 5.65-9 10-9 10Z" fill="currentColor"/></svg>Жизни (выживание)</span>
+      <div class="btn-group" id="lives-group">
+        <button class="btn-opt" data-val="1" onclick="setOpt('lives',this)">1</button>
+        <button class="btn-opt active active-yellow" data-val="3" onclick="setOpt('lives',this)">3</button>
+        <button class="btn-opt" data-val="5" onclick="setOpt('lives',this)">5</button>
+        <button class="btn-opt" data-val="999" onclick="setOpt('lives',this)">∞</button>
+      </div>
+    </div>
+
+    <button class="btn-main" onclick="ensurePlayerName().then(startGame)">СТАРТ</button>
+    <button class="btn-secondary" onclick="showLeaderboard()">🏆 Лидерборд</button>
+  </div>
+</div>
+
+<!-- ===== GAME OVER PANEL ===== -->
+<div class="panel" id="gameover-panel" style="display:none;">
+  <div class="card">
+    <div class="card-title">Игра окончена</div>
+    <div class="score-big" id="final-score">0</div>
+    <div style="color:#64748b;font-size:12px;text-align:center;margin-bottom:20px;">Финальный счёт</div>
+    <div id="stats-block" style="margin-bottom:20px;">
+      <div class="stat-row"><span>Слов напечатано</span><span id="stat-typed">0</span></div>
+      <div class="stat-row"><span>Слов пропущено</span><span id="stat-missed">0</span></div>
+      <div class="stat-row"><span>Точность</span><span id="stat-acc">0%</span></div>
+      <div class="stat-row"><span>Лучшее комбо</span><span id="stat-combo">×1</span></div>
+    </div>
+    <button class="btn-main" onclick="startGame()">ЕЩЁРАЗ</button>
+    <button class="btn-secondary" onclick="showMenu()">Настройки</button>
+  </div>
+</div>
+
+<!-- ===== PAUSE PANEL ===== -->
+<div class="panel" id="pause-panel" style="display:none;">
+  <div class="card" style="max-width:300px;">
+    <div class="card-title" style="font-size:32px;"><svg viewBox="0 0 24 24" class="icon-svg" aria-hidden="true"><rect x="7" y="5" width="4" height="14" rx="1.5"/><rect x="13" y="5" width="4" height="14" rx="1.5"/></svg>Пауза</div>
+    <button class="btn-main" onclick="togglePause()">ПРОДОЛЖИТЬ</button>
+    <button class="btn-secondary" onclick="showMenu()">Выйти в меню</button>
+  </div>
+</div>
+
+<!-- ===== IN-GAME SETTINGS PANEL ===== -->
+<div class="panel" id="ig-settings-panel" style="display:none;">
+  <div class="card" style="max-width:360px;">
+    <div class="card-title" style="font-size:28px;margin-bottom:16px;">Настройки</div>
+
+    <div class="setting-group">
+      <span class="setting-label"><svg viewBox="0 0 24 24" class="icon-svg" aria-hidden="true"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z"/></svg>Скорость</span>
+      <div class="btn-group" id="ig-speed-group">
+        <button class="btn-opt" data-val="slow" onclick="setOptIG('speed',this)">Лёгкая</button>
+        <button class="btn-opt" data-val="normal" onclick="setOptIG('speed',this)">Средняя</button>
+        <button class="btn-opt" data-val="fast" onclick="setOptIG('speed',this)">Быстрая</button>
+      </div>
+    </div>
+
+    <div class="setting-group">
+      <span class="setting-label"><svg viewBox="0 0 24 24" class="icon-svg" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none"/><path d="M3 12h18M12 3c2.5 2.5 2.5 6.5 0 9.5M12 21c2.5-2.5 2.5-6.5 0-9.5" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>Языки</span>
+      <div class="btn-group">
+        <button class="lang-toggle" id="ig-lang-en" onclick="toggleLangIG('en')">EN</button>
+        <button class="lang-toggle" id="ig-lang-ru" onclick="toggleLangIG('ru')">RU</button>
+        <button class="lang-toggle" id="ig-lang-kg" onclick="toggleLangIG('kg')">KG</button>
+      </div>
+    </div>
+
+    <button class="btn-main" onclick="closeSettings()">СОХРАНИТЬ</button>
+  </div>
+</div>
+
+<!-- ===== PLAYER NAME MODAL ===== -->
+<div class="modal-overlay" id="player-name-modal">
+  <div class="modal-content">
+    <button class="modal-close" onclick="closePlayerNameModal()">×</button>
+    <h2 style="margin: 0 0 16px 0; font-size: 20px;">Как вас зовут?</h2>
+    <p style="color: #64748b; font-size: 13px; margin-bottom: 16px;">Придумайте себе ник для сохранения результатов</p>
+    <input type="text" id="player-name-input" placeholder="Введите ваш ник..." maxlength="30"/>
+    <button class="btn-main" onclick="setPlayerName()">ПРОДОЛЖИТЬ</button>
+  </div>
+</div>
+
+<!-- ===== LEADERBOARD PANEL ===== -->
+<div class="panel" id="leaderboard-panel" style="display:none;">
+  <div class="card" style="width: min(900px, 95vw); max-height: 85vh; display: flex; flex-direction: column;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+      <div class="card-title" style="margin: 0; font-size: 32px;">🏆 Лидерборд</div>
+      <button class="modal-close" onclick="hideLeaderboard()">×</button>
+    </div>
+    
+    <div class="leaderboard-tabs" id="leaderboard-tabs">
+      <button class="leaderboard-tab active" data-tab="top-scores" onclick="switchLeaderboardTab('top-scores')">Топ по очкам</button>
+      <button class="leaderboard-tab" data-tab="accuracy" onclick="switchLeaderboardTab('accuracy')">Точность</button>
+      <button class="leaderboard-tab" data-tab="games" onclick="switchLeaderboardTab('games')">Игроки</button>
+    </div>
+
+    <div id="leaderboard-content" style="flex: 1; overflow-y: auto;">
+      <div class="leaderboard-loading">Загрузка...</div>
+    </div>
+
+    <button class="btn-secondary" onclick="hideLeaderboard()" style="margin-top: 16px;">Закрыть</button>
+  </div>
+</div>
+
+<!-- ===== PLAYER STATS MODAL ===== -->
+<div class="modal-overlay" id="player-stats-modal">
+  <div class="modal-content">
+    <button class="modal-close" onclick="closePlayerStatsModal()">×</button>
+    <div id="player-stats-content"></div>
+  </div>
+</div>
+
+<script>
+// ===================== THEME =====================
+let isDark = localStorage.getItem('theme') === 'dark';
+function applyTheme() {
+  document.body.classList.toggle('dark', isDark);
+  const btn = document.getElementById('theme-btn');
+  if (btn) btn.textContent = isDark ? '☀️' : '🌙';
+}
+function toggleTheme() {
+  isDark = !isDark;
+  localStorage.setItem('theme', isDark ? 'dark' : 'light');
+  applyTheme();
+}
+
+// ===================== SUPABASE CONFIG =====
+console.log('Script loaded');
+const SUPABASE_URL = 'https://gudtpzbhlsnjchglurmt.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd1ZHRwemJobHNuamNoZ2x1cm10Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2MDk5NzksImV4cCI6MjA5MjE4NTk3OX0.zkymTUvm55CngbUEgyEIGKf5fEbt81hAp8iVevPgr3g';
+window.supabaseClient = null;
+
+// Initialize Supabase after page load
+function initSupabase() {
+  if (SUPABASE_URL.includes('YOUR_PROJECT') || !window.supabase) {
+    console.warn('Supabase не настроен. Лидерборд работать не будет.');
+    return;
+  }
+  try {
+    window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log('✓ Supabase initialized successfully');
+  } catch (error) {
+    console.error('Error initializing Supabase:', error);
+  }
+}
+
+// Player state
+let currentPlayer = {
+  id: null,
+  name: localStorage.getItem('playerName') || null,
+  total_score: 0,
+  games_played: 0
+};
+
+// Load or create player name
+function ensurePlayerName() {
+  if (currentPlayer.name) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    showPlayerNameModal(() => resolve());
+  });
+}
+
+function showPlayerNameModal(onClose) {
+  const modal = document.getElementById('player-name-modal');
+  const input = document.getElementById('player-name-input');
+  modal.classList.add('show');
+  input.value = '';
+  input.focus();
+  
+  const handleSet = () => {
+    setPlayerName();
+    if (onClose) onClose();
+  };
+  
+  const handleKey = (e) => {
+    if (e.key === 'Enter') handleSet();
+  };
+  
+  input.addEventListener('keydown', handleKey);
+  window.playerNameOnClose = onClose;
+}
+
+function closePlayerNameModal() {
+  document.getElementById('player-name-modal').classList.remove('show');
+  const input = document.getElementById('player-name-input');
+  input.removeEventListener('keydown', arguments.callee);
+}
+
+function setPlayerName() {
+  const input = document.getElementById('player-name-input');
+  const name = input.value.trim();
+  
+  if (!name) {
+    alert('Пожалуйста, введите ник');
+    return;
+  }
+  
+  currentPlayer.name = name;
+  localStorage.setItem('playerName', name);
+  closePlayerNameModal();
+  
+  if (window.playerNameOnClose) {
+    window.playerNameOnClose();
+    window.playerNameOnClose = null;
+  }
+}
+
+// Save score to Supabase
+async function saveScoreToSupabase() {
+  if (!window.supabaseClient || !currentPlayer.name) return;
+  
+  try {
+    // Get or create player
+    let player = null;
+    const { data: existing, error: fetchError } = await window.supabaseClient
+      .from('players')
+      .select('*')
+      .eq('username', currentPlayer.name)
+      .single();
+    
+    if (!fetchError && existing) {
+      player = existing;
+    } else {
+      const { data: newPlayer, error: createError } = await window.supabaseClient
+        .from('players')
+        .insert({
+          username: currentPlayer.name,
+          total_score: gameState.score,
+          games_played: 1,
+          total_typed: gameState.typedCount,
+          total_missed: gameState.missedCount,
+          best_score: gameState.score,
+          best_combo: gameState.maxCombo
+        })
+        .select()
+        .single();
+      
+      if (createError) {
+        console.error('Error creating player:', createError);
+        return;
+      }
+      player = newPlayer;
+    }
+    
+    currentPlayer.id = player.id;
+    
+    // Save game score
+    const accuracy = gameState.typedCount + gameState.missedCount > 0 
+      ? Math.round(gameState.typedCount / (gameState.typedCount + gameState.missedCount) * 100)
+      : 100;
+    
+    const languages = Object.keys(settings.langs)
+      .filter(l => settings.langs[l])
+      .join(',');
+    
+    const { error: scoreError } = await window.supabaseClient
+      .from('game_scores')
+      .insert({
+        player_id: player.id,
+        score: gameState.score,
+        typed_count: gameState.typedCount,
+        missed_count: gameState.missedCount,
+        accuracy: accuracy,
+        max_combo: gameState.maxCombo,
+        mode: settings.mode,
+        speed: settings.speed,
+        word_length: settings.len,
+        languages: languages,
+        duration_seconds: Math.floor((Date.now() - gameState.startTime) / 1000)
+      });
+    
+    if (scoreError) {
+      console.error('Error saving score:', scoreError);
+      return;
+    }
+    
+    // Update player stats
+    const newTotalScore = (player.total_score || 0) + gameState.score;
+    const newGamesPlayed = (player.games_played || 0) + 1;
+    const newTotalTyped = (player.total_typed || 0) + gameState.typedCount;
+    const newTotalMissed = (player.total_missed || 0) + gameState.missedCount;
+    const newAvgAccuracy = Math.round(newTotalTyped / (newTotalTyped + newTotalMissed) * 100);
+    const newBestScore = Math.max(player.best_score || 0, gameState.score);
+    const newBestCombo = Math.max(player.best_combo || 0, gameState.maxCombo);
+    
+    await window.supabaseClient
+      .from('players')
+      .update({
+        total_score: newTotalScore,
+        games_played: newGamesPlayed,
+        total_typed: newTotalTyped,
+        total_missed: newTotalMissed,
+        avg_accuracy: newAvgAccuracy,
+        best_score: newBestScore,
+        best_combo: newBestCombo,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', player.id);
+    
+    currentPlayer.total_score = newTotalScore;
+    currentPlayer.games_played = newGamesPlayed;
+    showToast('Результат сохранён! 🏆', '#10b981');
+  } catch (error) {
+    console.error('Error saving score:', error);
+  }
+}
+
+// Fetch leaderboard data
+async function fetchLeaderboard(tab = 'top-scores') {
+  if (!window.supabaseClient) return [];
+  
+  try {
+    let query = window.supabaseClient.from('players').select('*');
+    
+    if (tab === 'top-scores') {
+      query = query.order('total_score', { ascending: false });
+    } else if (tab === 'accuracy') {
+      query = query.order('avg_accuracy', { ascending: false });
+    } else if (tab === 'games') {
+      query = query.order('games_played', { ascending: false });
+    }
+    
+    const { data, error } = await query.limit(100);
+    
+    if (error) {
+      console.error('Error fetching leaderboard:', error);
+      return [];
+    }
+    
+    return data || [];
+  } catch (error) {
+    console.error('Error:', error);
+    return [];
+  }
+}
+
+// Display leaderboard
+async function displayLeaderboard(tab = 'top-scores') {
+  const content = document.getElementById('leaderboard-content');
+  content.innerHTML = '<div class="leaderboard-loading">Загрузка...</div>';
+  
+  const data = await fetchLeaderboard(tab);
+  
+  if (data.length === 0) {
+    content.innerHTML = '<div class="leaderboard-loading">Пока нет результатов</div>';
+    return;
+  }
+  
+  let html = '<table class="leaderboard-table"><thead><tr>';
+  if (tab === 'top-scores') {
+    html += '<th style="width: 60px;">Место</th><th>Игрок</th><th style="width: 100px;">Очки</th><th style="width: 80px;">Игры</th>';
+  } else if (tab === 'accuracy') {
+    html += '<th style="width: 60px;">Место</th><th>Игрок</th><th style="width: 100px;">Точность</th><th style="width: 80px;">Слов</th>';
+  } else {
+    html += '<th style="width: 60px;">Место</th><th>Игрок</th><th style="width: 80px;">Игры</th><th style="width: 100px;">Лучший</th>';
+  }
+  html += '</tr></thead><tbody>';
+  
+  data.forEach((player, index) => {
+    const rank = index + 1;
+    let rankClass = 'rank-other';
+    if (rank === 1) rankClass = 'rank-1';
+    else if (rank === 2) rankClass = 'rank-2';
+    else if (rank === 3) rankClass = 'rank-3';
+    
+    const rankBadge = `<span class="rank-badge ${rankClass}">${rank}</span>`;
+    const playerName = `<span class="player-name">${player.username}</span>`;
+    
+    let row = `<tr style="cursor: pointer;" onclick="showPlayerStats('${player.id}')">
+      <td>${rankBadge}</td>
+      <td>${playerName}</td>`;
+    
+    if (tab === 'top-scores') {
+      row += `<td><span class="stat-value">${player.total_score.toLocaleString()}</span></td>
+              <td>${player.games_played}</td>`;
+    } else if (tab === 'accuracy') {
+      row += `<td><span class="stat-value">${player.avg_accuracy}%</span></td>
+              <td>${player.total_typed + player.total_missed}</td>`;
+    } else {
+      row += `<td>${player.games_played}</td>
+              <td><span class="stat-value">${player.best_score.toLocaleString()}</span></td>`;
+    }
+    
+    row += '</tr>';
+    html += row;
+  });
+  
+  html += '</tbody></table>';
+  content.innerHTML = html;
+}
+
+// Show player stats modal
+async function showPlayerStats(playerId) {
+  if (!window.supabaseClient) return;
+
+  document.getElementById('player-stats-content').innerHTML = '<div style="text-align:center;padding:40px 0;color:#9ca3af;">Загрузка...</div>';
+  document.getElementById('player-stats-modal').classList.add('show');
+
+  try {
+    const { data: player, error } = await window.supabaseClient
+      .from('players')
+      .select('*')
+      .eq('id', playerId)
+      .single();
+    
+    if (error || !player) {
+      document.getElementById('player-stats-content').innerHTML = '<div style="text-align:center;padding:40px 0;color:#ef4444;">Ошибка загрузки</div>';
+      return;
+    }
+    
+    // Fetch recent games
+    const { data: games } = await window.supabaseClient
+      .from('game_scores')
+      .select('*')
+      .eq('player_id', playerId)
+      .order('played_at', { ascending: false })
+      .limit(5);
+    
+    let html = `<div style="margin-bottom: 20px;">
+      <h2 style="margin: 0 0 4px 0; font-size: 22px; font-weight: 700;">${player.username}</h2>
+      <p style="color: #64748b; font-size: 13px; margin: 0;">Статистика игрока</p>
+    </div>`;
+    
+    html += `
+    <div class="player-stat-row"><span class="player-stat-label">Лучший результат</span><span class="player-stat-value">${(player.best_score||0).toLocaleString()}</span></div>
+    <div class="player-stat-row"><span class="player-stat-label">Всего очков</span><span class="player-stat-value">${(player.total_score||0).toLocaleString()}</span></div>
+    <div class="player-stat-row"><span class="player-stat-label">Игр сыграно</span><span class="player-stat-value">${player.games_played||0}</span></div>
+    <div class="player-stat-row"><span class="player-stat-label">Лучшее комбо</span><span class="player-stat-value">×${player.best_combo||1}</span></div>
+    <div class="player-stat-row"><span class="player-stat-label">Точность</span><span class="player-stat-value">${player.avg_accuracy||0}%</span></div>
+    <div class="player-stat-row"><span class="player-stat-label">Слов напечатано</span><span class="player-stat-value">${player.total_typed||0}</span></div>
+    <div class="player-stat-row"><span class="player-stat-label">Слов пропущено</span><span class="player-stat-value">${player.total_missed||0}</span></div>`;
+    
+    if (games && games.length > 0) {
+      html += `<div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+        <h3 style="margin: 0 0 10px 0; font-size: 13px; font-weight: 700; color: #374151;">Последние игры</h3>`;
+      games.forEach(game => {
+        const date = new Date(game.played_at).toLocaleString('ru-RU', {
+          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+        const modeLabel = { survival: 'Выживание', timer60: '60 сек', timer120: '120 сек' }[game.mode] || game.mode;
+        html += `<div style="padding: 7px 0; font-size: 12px; color: #64748b; border-bottom: 1px solid #f1f5f9;">
+          <span style="font-weight:700;color:#111827;">${(game.score||0).toLocaleString()}</span> очков
+          &nbsp;·&nbsp;${game.accuracy||0}%
+          &nbsp;·&nbsp;×${game.max_combo||1} комбо
+          &nbsp;·&nbsp;${modeLabel}
+          <span style="float:right;">${date}</span>
+        </div>`;
+      });
+      html += '</div>';
+    }
+    
+    document.getElementById('player-stats-content').innerHTML = html;
+  } catch (error) {
+    console.error('Error:', error);
+    document.getElementById('player-stats-content').innerHTML = '<div style="text-align:center;padding:40px 0;color:#ef4444;">Ошибка загрузки</div>';
+  }
+}
+
+function closePlayerStatsModal() {
+  document.getElementById('player-stats-modal').classList.remove('show');
+}
+
+// Leaderboard panel functions
+function showLeaderboard() {
+  ensurePlayerName().then(() => {
+    document.getElementById('leaderboard-panel').style.display = 'flex';
+    displayLeaderboard('top-scores');
+  });
+}
+
+function hideLeaderboard() {
+  document.getElementById('leaderboard-panel').style.display = 'none';
+}
+
+function switchLeaderboardTab(tab) {
+  document.querySelectorAll('.leaderboard-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+  displayLeaderboard(tab);
+}
+
+// ===================== WORD BANKS =====================
+const WORDS = {
+  en: {
+    short: ['cat','dog','sun','run','win','key','map','box','cup','top','fly','day','sky','air','sea','red','big','old','new','hot','web','bug','fix','log','tap','row','hit','tip','fog','bay'],
+    medium: ['apple','beach','cloud','dance','earth','flame','grace','house','image','juice','knife','light','money','night','ocean','pizza','queen','radio','smile','table','under','video','water','xenon','yield','zebra','brave','cycle','dream','enter'],
+    long: ['beautiful','computer','dangerous','elephant','fantastic','generate','hospital','imperial','joyfully','keyboard','language','mountain','navigate','original','personal','question','research','saturday','together','umbrella','vacation','wonderful','exercise','absolute','boundary','complete']
+  },
+  ru: {
+    short: ['кот','дом','сон','рот','нос','лес','час','мир','год','сад','ум','дар','шаг','бег','свет','цвет','стол','дорог','зуб','вид','лёд','сок','пар','суп','лук','рыба','ночь','день','речь','путь'],
+    medium: ['время','место','право','смысл','слово','голос','земля','небо','вода','огонь','город','школа','книга','музык','зима','весна','осень','лето','страна','жизнь','дерево','ветер','утро','вечер','работа','семья','сердце','мечта','свобода','память'],
+    long: ['человек','природа','красота','понимать','развитие','общество','образование','культура','поверхность','происходить','назначение','настоящий','путешествие','технология','производить','продолжение','необходимо','безопасный','управление','направление','информация','результат','завершение','пространство','существует']
+  },
+  kg: {
+    short: ['үй','суу','кол','баш','жер','тоо','жол','ат','кыз','ата','эне','аты','кан','кар','жаз','жай','күз','кыш','эл','сөз','күн','түн','ай','жыл','дос','акы','тил','таш','дарак','балык'],
+    medium: ['адам','балдар','мектеп','китеп','шаар','айыл','суйуу','достук','эмгек','жашоо','тарых','маданий','мекем','билим','жылдыз','айдар','кошмок','табигат','сулуулук','маалымат','кыргыз','тиши','кийим','музыка','санаа','дарман','бирдик','элдик','кадыр','мамиле'],
+    long: ['кыргызстан','маданият','суйгонум','окуучулар','мугалимдер','башкаруу','өнүгүүнүн','эркиндик','биримдик','достугубуз','балдарыбыз','жашоосун','тарыхыбыз','мекенибиз','элибиздин','жердигибиз','жогорулуу','боорукерлик','чыгармачыл','маанилүүсу']
+  }
+};
+
+// ===================== GAME STATE =====================
+let settings = {
+  langs: { en: true, ru: true, kg: true },
+  speed: 'slow',
+  len: 'short',
+  mode: 'survival',
+  lives: 3
+};
+
+let gameState = {
+  active: false,
+  paused: false,
+  score: 0,
+  combo: 1,
+  maxCombo: 1,
+  lives: 3,
+  typedCount: 0,
+  missedCount: 0,
+  timeLeft: 60,
+  words: [],
+  nextWordId: 0,
+  lastSpawnTime: 0,
+  animFrame: null,
+  timerInterval: null,
+  currentTarget: null,
+  startTime: 0
+};
+
+// ===================== SETTINGS UI =====================
+function toggleLang(lang) {
+  settings.langs[lang] = !settings.langs[lang];
+  const anyActive = Object.values(settings.langs).some(v => v);
+  if (!anyActive) { settings.langs[lang] = true; }
+  updateLangButtons();
+}
+function updateLangButtons() {
+  ['en','ru','kg'].forEach(l => {
+    const btn = document.getElementById('lang-' + l);
+    btn.className = 'lang-toggle';
+    if (settings.langs[l]) btn.classList.add('active-' + l);
+  });
+}
+function toggleLangIG(lang) {
+  settings.langs[lang] = !settings.langs[lang];
+  const anyActive = Object.values(settings.langs).some(v => v);
+  if (!anyActive) { settings.langs[lang] = true; }
+  updateLangButtonsIG();
+  updateLangButtons();
+}
+function updateLangButtonsIG() {
+  ['en','ru','kg'].forEach(l => {
+    const btn = document.getElementById('ig-lang-' + l);
+    btn.className = 'lang-toggle';
+    if (settings.langs[l]) btn.classList.add('active-' + l);
+  });
+}
+
+const activeClassMap = {
+  speed: 'active',
+  len: 'active-purple',
+  mode: 'active-green',
+  lives: 'active-yellow'
+};
+function setOpt(key, btn) {
+  const group = document.getElementById(key + '-group');
+  group.querySelectorAll('.btn-opt').forEach(b => b.classList.remove('active','active-purple','active-green','active-yellow','active-pink'));
+  btn.classList.add('active', activeClassMap[key]);
+  settings[key] = btn.dataset.val;
+  if (key === 'lives') settings.lives = parseInt(btn.dataset.val);
+}
+function setOptIG(key, btn) {
+  const group = document.getElementById('ig-' + key + '-group');
+  group.querySelectorAll('.btn-opt').forEach(b => b.classList.remove('active','active-purple','active-green','active-yellow','active-pink'));
+  btn.classList.add('active', activeClassMap[key]);
+  settings[key] = btn.dataset.val;
+  // sync main menu buttons too
+  const mainGroup = document.getElementById(key + '-group');
+  if (mainGroup) {
+    mainGroup.querySelectorAll('.btn-opt').forEach(b => {
+      b.classList.remove('active','active-purple','active-green','active-yellow','active-pink');
+      if (b.dataset.val === settings[key]) b.classList.add('active', activeClassMap[key]);
+    });
+  }
+}
+
+// ===================== SPEED CONFIG =====================
+const SPEED_CONFIG = {
+  slow:   { fallSpeed: 28, spawnInterval: 3200, maxWords: 4 },
+  normal: { fallSpeed: 50, spawnInterval: 2400, maxWords: 5 },
+  fast:   { fallSpeed: 78, spawnInterval: 1800, maxWords: 6 },
+  insane: { fallSpeed: 130, spawnInterval: 1100, maxWords: 8 }
+};
+
+// ===================== DYNAMIC SPEED =====================
+// Прогресс растёт каждые 100 очков, максимум на уровне 10 (1000+ очков)
+// Базовые параметры берутся из выбранной сложности и плавно усиливаются
+function getDynamicCfg() {
+  const base = SPEED_CONFIG[settings.speed];
+  const level = Math.min(Math.floor(gameState.score / 100), 10);
+  const t = level / 10; // 0..1
+  return {
+    fallSpeed:     base.fallSpeed     * (1 + t * 1.2),   // до +120% скорости
+    spawnInterval: base.spawnInterval * (1 - t * 0.45),  // до -45% интервала
+    maxWords:      base.maxWords + Math.floor(t * 3)      // до +3 слов
+  };
+}
+
+// Показываем тост при повышении уровня
+let lastSpeedLevel = 0;
+function checkSpeedLevel() {
+  const level = Math.min(Math.floor(gameState.score / 100), 10);
+  if (level > lastSpeedLevel) {
+    lastSpeedLevel = level;
+    if (level > 0) {
+      showToast(`⚡ Уровень ${level} — быстрее!`, '#6366f1');
+      playSound('levelup');
+    }
+  }
+}
+
+// ===================== SOUND ENGINE =====================
+let audioCtx = null;
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function playSound(type) {
+  try {
+    const ctx = getAudioCtx();
+    const g = ctx.createGain();
+    g.connect(ctx.destination);
+
+    if (type === 'type') {
+      // Лёгкий клик при каждом символе
+      const o = ctx.createOscillator();
+      o.connect(g);
+      o.type = 'sine';
+      o.frequency.setValueAtTime(880, ctx.currentTime);
+      o.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.06);
+      g.gain.setValueAtTime(0.08, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06);
+      o.start(); o.stop(ctx.currentTime + 0.06);
+
+    } else if (type === 'word') {
+      // Приятный аккорд при завершении слова
+      [523, 659, 784].forEach((freq, i) => {
+        const o = ctx.createOscillator();
+        o.connect(g);
+        o.type = 'sine';
+        o.frequency.value = freq;
+        g.gain.setValueAtTime(0.12, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+        o.start(ctx.currentTime + i * 0.03);
+        o.stop(ctx.currentTime + 0.35);
+      });
+
+    } else if (type === 'combo') {
+      // Восходящий арпеджио при комбо
+      const notes = [523, 659, 784, 1047];
+      notes.forEach((freq, i) => {
+        const o = ctx.createOscillator();
+        const og = ctx.createGain();
+        o.connect(og); og.connect(ctx.destination);
+        o.type = 'triangle';
+        o.frequency.value = freq;
+        og.gain.setValueAtTime(0.13, ctx.currentTime + i * 0.07);
+        og.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.07 + 0.25);
+        o.start(ctx.currentTime + i * 0.07);
+        o.stop(ctx.currentTime + i * 0.07 + 0.25);
+      });
+
+    } else if (type === 'miss') {
+      // Низкий глухой звук при промахе
+      const o = ctx.createOscillator();
+      o.connect(g);
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(180, ctx.currentTime);
+      o.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.25);
+      g.gain.setValueAtTime(0.15, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+      o.start(); o.stop(ctx.currentTime + 0.25);
+
+    } else if (type === 'levelup') {
+      // Фанфара при повышении уровня
+      [523, 659, 784, 1047, 1319].forEach((freq, i) => {
+        const o = ctx.createOscillator();
+        const og = ctx.createGain();
+        o.connect(og); og.connect(ctx.destination);
+        o.type = 'square';
+        o.frequency.value = freq;
+        og.gain.setValueAtTime(0.08, ctx.currentTime + i * 0.08);
+        og.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.08 + 0.2);
+        o.start(ctx.currentTime + i * 0.08);
+        o.stop(ctx.currentTime + i * 0.08 + 0.2);
+      });
+    }
+  } catch(e) {}
+}
+
+// ===================== WORD PICKER =====================
+function getWordPool() {
+  const activeLangs = Object.keys(settings.langs).filter(l => settings.langs[l]);
+  if (!activeLangs.length) return ['word'];
+  const lenKey = settings.len === 'mix' ? null : settings.len;
+  const pool = [];
+  activeLangs.forEach(lang => {
+    if (lenKey) {
+      pool.push(...WORDS[lang][lenKey].map(w => ({ text: w, lang })));
+    } else {
+      ['short','medium','long'].forEach(k => {
+        pool.push(...WORDS[lang][k].map(w => ({ text: w, lang })));
+      });
+    }
+  });
+  return pool;
+}
+
+function pickWord() {
+  const pool = getWordPool();
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+// ===================== GAME CANVAS HELPERS =====================
+function canvasWidth() { return document.getElementById('game-canvas').clientWidth; }
+function canvasHeight() { return document.getElementById('game-canvas').clientHeight; }
+
+// ===================== SPAWN WORD =====================
+function spawnWord() {
+  const cfg = getDynamicCfg();
+  if (gameState.words.length >= cfg.maxWords) return;
+
+  const { text, lang } = pickWord();
+  const id = gameState.nextWordId++;
+  const cw = canvasWidth();
+
+  const el = document.createElement('div');
+  el.className = 'falling-word';
+  el.id = 'fw-' + id;
+  const fontSize = window.innerWidth < 480 ? 16 : window.innerWidth < 768 ? 18 : 22;
+  el.style.fontSize = fontSize + 'px';
+
+  // Build characters + badge
+  const charsHTML = [...text].map(c => `<span class="char-untyped">${c}</span>`).join('');
+  const badgeClass = `badge-${lang}`;
+  const badgeLabel = { en: 'EN', ru: 'RU', kg: 'KG' }[lang];
+  el.innerHTML = `${charsHTML}<span class="lang-badge ${badgeClass}">${badgeLabel}</span>`;
+
+  const xMin = 10;
+  const xMax = Math.max(xMin + 20, cw - text.length * fontSize * 0.7 - 20);
+  const x = Math.floor(Math.random() * (xMax - xMin) + xMin);
+
+  el.style.left = x + 'px';
+  el.style.top = '0px';
+  el.style.transform = 'translateY(0px)';
+
+  document.getElementById('game-canvas').appendChild(el);
+
+  const wordObj = {
+    id, text, lang, el,
+    y: 0,
+    speed: cfg.fallSpeed * (1 + (Math.random() - 0.5) * 0.3),
+    matched: 0,
+    done: false
+  };
+  gameState.words.push(wordObj);
+}
+
+// ===================== MAIN LOOP =====================
+let lastTimestamp = 0;
+function gameLoop(timestamp) {
+  if (!gameState.active || gameState.paused) return;
+  const delta = Math.min((timestamp - lastTimestamp) / 1000, 0.1);
+  lastTimestamp = timestamp;
+
+  // Spawn
+  if (timestamp - gameState.lastSpawnTime > getDynamicCfg().spawnInterval) {
+    spawnWord();
+    gameState.lastSpawnTime = timestamp;
+  }
+
+  const ch = canvasHeight();
+  const dangerThreshold = ch - 120;
+
+  for (const word of gameState.words) {
+    if (word.done) continue;
+    word.y += word.speed * delta;
+    word.el.style.top = word.y + 'px';
+
+    // Danger glow
+    if (word.y > dangerThreshold) {
+      word.el.classList.add('word-danger');
+    } else {
+      word.el.classList.remove('word-danger');
+    }
+
+    // Missed — hit bottom
+    if (word.y + 40 > ch - 80) {
+      wordMissed(word);
+    }
+  }
+
+  gameState.animFrame = requestAnimationFrame(gameLoop);
+}
+
+// ===================== WORD MISSED =====================
+function wordMissed(word) {
+  if (word.done) return;
+  word.done = true;
+
+  // Flash red effect
+  word.el.style.color = '#ef4444';
+  word.el.style.opacity = '0.6';
+  word.el.classList.add('miss-flash');
+  setTimeout(() => word.el.remove(), 400);
+
+  gameState.words = gameState.words.filter(w => w.id !== word.id);
+
+  // If was target, clear
+  if (gameState.currentTarget && gameState.currentTarget.id === word.id) {
+    gameState.currentTarget = null;
+    document.getElementById('word-input').value = '';
+  }
+
+  // Reset combo
+  gameState.combo = 1;
+  updateCombo();
+  playSound('miss');
+
+  gameState.missedCount++;
+  if (settings.mode === 'survival') {
+    gameState.lives--;
+    updateLives();
+    flashCanvas();
+    if (gameState.lives <= 0) endGame();
+  }
+}
+
+// ===================== INPUT HANDLING =====================
+function handleInput(e) {
+  if (!gameState.active || gameState.paused) return;
+  const val = e.target.value.toLowerCase().trim();
+  if (!val) {
+    clearTargetHighlight();
+    gameState.currentTarget = null;
+    return;
+  }
+
+  // Find best matching word (longest prefix match)
+  let bestWord = null;
+  let bestMatchLen = 0;
+  for (const word of gameState.words) {
+    if (word.done) continue;
+    const wordLower = word.text.toLowerCase();
+    if (wordLower.startsWith(val) || val.startsWith(wordLower.substring(0, val.length))) {
+      if (wordLower.startsWith(val) && val.length > bestMatchLen) {
+        bestMatchLen = val.length;
+        bestWord = word;
+      }
+    }
+  }
+
+  // Also accept exact partial match from current target
+  if (gameState.currentTarget && !gameState.currentTarget.done) {
+    const t = gameState.currentTarget.text.toLowerCase();
+    if (t.startsWith(val)) {
+      bestWord = gameState.currentTarget;
+      bestMatchLen = val.length;
+    }
+  }
+
+  if (bestWord) {
+    gameState.currentTarget = bestWord;
+    updateWordHighlight(bestWord, val.length);
+
+    if (val === bestWord.text.toLowerCase()) {
+      // Complete match!
+      wordTyped(bestWord, val);
+      e.target.value = '';
+      e.target.classList.remove('input-error');
+      e.target.classList.add('input-match');
+      setTimeout(() => e.target.classList.remove('input-match'), 300);
+    } else {
+      e.target.classList.remove('input-error');
+    }
+  } else {
+    // No match
+    clearTargetHighlight();
+    gameState.currentTarget = null;
+    e.target.classList.add('input-error');
+    setTimeout(() => e.target.classList.remove('input-error'), 300);
+  }
+}
+
+function updateWordHighlight(word, typedLen) {
+  // Clear other words
+  for (const w of gameState.words) {
+    if (w.done || w.id === word.id) continue;
+    w.el.classList.remove('word-active');
+    const chars = w.el.querySelectorAll('span.char-typed, span.char-untyped');
+    chars.forEach(c => { c.className = 'char-untyped'; });
+  }
+
+  // Highlight target word
+  word.el.classList.add('word-active');
+  const chars = word.el.querySelectorAll('span.char-typed, span.char-untyped');
+  chars.forEach((c, i) => {
+    c.className = i < typedLen ? 'char-typed' : 'char-untyped';
+  });
+}
+
+function clearTargetHighlight() {
+  for (const w of gameState.words) {
+    if (w.done) continue;
+    w.el.classList.remove('word-active');
+    const chars = w.el.querySelectorAll('span.char-typed, span.char-untyped');
+    chars.forEach(c => { c.className = 'char-untyped'; });
+  }
+}
+
+// ===================== WORD TYPED =====================
+function wordTyped(word, typed) {
+  if (word.done) return;
+  word.done = true;
+  gameState.currentTarget = null;
+  gameState.typedCount++;
+
+  // Score calculation
+  const lengthBonus = word.text.length;
+  const comboBonus = gameState.combo;
+  const points = Math.round((10 + lengthBonus * 5) * comboBonus);
+  gameState.score += points;
+
+  // Combo
+  gameState.combo = Math.min(gameState.combo + 1, 8);
+  gameState.maxCombo = Math.max(gameState.maxCombo, gameState.combo);
+  updateCombo();
+
+  // Show popup
+  showScorePopup(word.el, '+' + points, comboBonus >= 3);
+
+  // Explode animation
+  word.el.classList.add('word-explode');
+  word.el.style.color = '#34d399';
+  setTimeout(() => word.el.remove(), 400);
+
+  gameState.words = gameState.words.filter(w => w.id !== word.id);
+  updateScore();
+
+  // Sounds
+  if (gameState.combo >= 3) {
+    playSound('combo');
+  } else {
+    playSound('word');
+  }
+
+  checkSpeedLevel();
+
+  // Toast for combo
+  if (gameState.combo === 3) showToast('Комбо ×3!', '#fbbf24');
+  if (gameState.combo === 5) showToast('Комбо ×5!', '#f97316');
+  if (gameState.combo === 8) showToast('МАКС КОМБО!', '#ec4899');
+}
+
+// ===================== SCORE POPUP =====================
+function showScorePopup(referenceEl, text, glow) {
+  const popup = document.createElement('div');
+  popup.className = 'score-popup';
+  popup.textContent = text;
+  popup.style.color = glow ? '#b45309' : '#15803d';
+  popup.style.textShadow = 'none';
+
+  const rect = referenceEl.getBoundingClientRect();
+  popup.style.left = (rect.left + rect.width / 2 - 20) + 'px';
+  popup.style.top = (rect.top - 10) + 'px';
+  document.body.appendChild(popup);
+  setTimeout(() => popup.remove(), 900);
+}
+
+// ===================== UI UPDATES =====================
+function updateScore() {
+  document.getElementById('score-display').textContent = gameState.score.toLocaleString();
+}
+function updateLives() {
+  const hearts = ['❤','❤','❤','❤','❤'].slice(0, Math.min(gameState.lives, 5));
+  const empty  = ['🖤','🖤','🖤','🖤','🖤'].slice(0, Math.max(0, Math.min(settings.lives, 5) - gameState.lives));
+  if (settings.lives >= 999) {
+    document.getElementById('lives-display').textContent = '∞';
+  } else {
+    document.getElementById('lives-display').textContent = hearts.join('') + empty.join('');
+  }
+}
+function updateCombo() {
+  document.getElementById('combo-display').textContent = '×' + gameState.combo;
+  // Dots
+  for (let i = 0; i < 5; i++) {
+    const dot = document.getElementById('cd' + i);
+    if (dot) dot.className = 'combo-dot' + (i < (gameState.combo - 1) ? ' lit' : '');
+  }
+}
+
+function flashCanvas() {
+  const canvas = document.getElementById('game-canvas');
+  canvas.style.background = 'rgba(59,130,246,0.08)';
+  setTimeout(() => canvas.style.background = '', 250);
+}
+
+function showToast(msg, color) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = '#f8fafc';
+  t.style.color = '#111827';
+  t.style.border = '1px solid #e5e7eb';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1600);
+}
+
+// ===================== TIMER =====================
+function startTimer(seconds) {
+  gameState.timeLeft = seconds;
+  const container = document.getElementById('timer-bar-container');
+  const bar = document.getElementById('timer-bar');
+  const display = document.getElementById('time-display');
+  container.style.display = 'block';
+  document.getElementById('hud-time-wrap').style.display = 'block';
+  display.textContent = seconds;
+  bar.style.width = '100%';
+
+  gameState.timerInterval = setInterval(() => {
+    if (gameState.paused) return;
+    gameState.timeLeft--;
+    display.textContent = gameState.timeLeft;
+    bar.style.width = (gameState.timeLeft / seconds * 100) + '%';
+
+    if (gameState.timeLeft <= 10) {
+      bar.style.background = 'linear-gradient(90deg, #f97316, #fb923c)';
+      bar.style.boxShadow = 'none';
+    } else {
+      bar.style.boxShadow = 'none';
+    }
+    if (gameState.timeLeft <= 0) {
+      clearInterval(gameState.timerInterval);
+      endGame();
+    }
+  }, 1000);
+}
+
+// ===================== START GAME =====================
+function startGame() {
+  // Reset state
+  gameState = {
+    active: true, paused: false,
+    score: 0, combo: 1, maxCombo: 1,
+    lives: settings.lives === 999 ? 999 : parseInt(settings.lives),
+    typedCount: 0, missedCount: 0,
+    timeLeft: 60, words: [], nextWordId: 0,
+    lastSpawnTime: 0, animFrame: null, timerInterval: null,
+    currentTarget: null, startTime: Date.now()
+  };
+  lastSpeedLevel = 0;
+  if (settings.lives === '3') gameState.lives = 3;
+  if (typeof settings.lives === 'string') gameState.lives = parseInt(settings.lives) || 3;
+
+  // Hide panels
+  document.getElementById('menu-panel').style.display = 'none';
+  document.getElementById('gameover-panel').style.display = 'none';
+  document.getElementById('pause-panel').style.display = 'none';
+  document.getElementById('ig-settings-panel').style.display = 'none';
+
+  // Clear old words
+  document.getElementById('game-canvas').querySelectorAll('.falling-word').forEach(e => e.remove());
+
+  // Show game UI
+  document.getElementById('hud').style.display = 'flex';
+  document.getElementById('input-area').style.display = 'block';
+  document.getElementById('pause-btn').classList.add('visible');
+  document.getElementById('settings-fab').classList.add('visible');
+  document.getElementById('combo-bar').classList.add('visible');
+  document.getElementById('ig-leaderboard').classList.add('visible');
+  loadIgLeaderboard();
+  document.getElementById('timer-bar-container').style.display = 'none';
+  document.getElementById('hud-time-wrap').style.display = 'none';
+
+  // Reset timer bar
+  const bar = document.getElementById('timer-bar');
+  bar.style.background = 'linear-gradient(90deg, #3b82f6, #10b981)';
+  bar.style.boxShadow = 'none';
+
+  updateScore();
+  updateLives();
+  updateCombo();
+
+  // Focus input
+  document.getElementById('word-input').value = '';
+  document.getElementById('word-input').focus();
+
+  // Timer mode
+  if (settings.mode === 'timer60') startTimer(60);
+  else if (settings.mode === 'timer120') startTimer(120);
+
+  // Start spawn & loop
+  gameState.lastSpawnTime = performance.now();
+  lastTimestamp = performance.now();
+  gameState.animFrame = requestAnimationFrame(gameLoop);
+
+  // First word immediately
+  setTimeout(spawnWord, 500);
+}
+
+// ===================== END GAME =====================
+function endGame() {
+  gameState.active = false;
+  cancelAnimationFrame(gameState.animFrame);
+  clearInterval(gameState.timerInterval);
+
+  // Hide game UI
+  document.getElementById('hud').style.display = 'none';
+  document.getElementById('input-area').style.display = 'none';
+  document.getElementById('pause-btn').classList.remove('visible');
+  document.getElementById('settings-fab').classList.remove('visible');
+  document.getElementById('combo-bar').classList.remove('visible');
+  document.getElementById('ig-leaderboard').classList.remove('visible');
+  document.getElementById('timer-bar-container').style.display = 'none';
+
+  // Clear words
+  document.getElementById('game-canvas').querySelectorAll('.falling-word').forEach(e => e.remove());
+
+  // Stats
+  document.getElementById('final-score').textContent = gameState.score.toLocaleString();
+  document.getElementById('stat-typed').textContent = gameState.typedCount;
+  document.getElementById('stat-missed').textContent = gameState.missedCount;
+  const total = gameState.typedCount + gameState.missedCount;
+  const acc = total > 0 ? Math.round(gameState.typedCount / total * 100) : 100;
+  document.getElementById('stat-acc').textContent = acc + '%';
+  document.getElementById('stat-combo').textContent = '×' + gameState.maxCombo;
+
+  // Save to Supabase if configured
+  if (window.supabaseClient) {
+    saveScoreToSupabase();
+  }
+
+  document.getElementById('gameover-panel').style.display = 'flex';
+}
+
+// ===================== PAUSE =====================
+function togglePause() {
+  if (!gameState.active) return;
+  gameState.paused = !gameState.paused;
+  document.getElementById('pause-panel').style.display = gameState.paused ? 'flex' : 'none';
+  document.getElementById('pause-btn').innerHTML = gameState.paused ? '<svg viewBox="0 0 24 24" class="icon-button" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>' : '<svg viewBox="0 0 24 24" class="icon-button" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.5"/><rect x="14" y="5" width="4" height="14" rx="1.5"/></svg>';
+  if (!gameState.paused) {
+    lastTimestamp = performance.now();
+    gameState.animFrame = requestAnimationFrame(gameLoop);
+    document.getElementById('word-input').focus();
+  }
+}
+
+// ===================== SETTINGS (in-game) =====================
+function openSettings() {
+  if (!gameState.active) return;
+  gameState.paused = true;
+  document.getElementById('pause-btn').innerHTML = '<svg viewBox="0 0 24 24" class="icon-button" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+
+  // Sync IG settings UI
+  document.getElementById('ig-settings-panel').querySelectorAll('.btn-opt').forEach(b => {
+    b.classList.remove('active','active-purple','active-green','active-yellow','active-pink');
+    if (b.closest('#ig-speed-group') && b.dataset.val === settings.speed) {
+      b.classList.add('active', activeClassMap['speed']);
+    }
+  });
+  updateLangButtonsIG();
+  document.getElementById('ig-settings-panel').style.display = 'flex';
+}
+function closeSettings() {
+  document.getElementById('ig-settings-panel').style.display = 'none';
+  gameState.paused = false;
+  document.getElementById('pause-btn').innerHTML = '<svg viewBox="0 0 24 24" class="icon-button" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.5"/><rect x="14" y="5" width="4" height="14" rx="1.5"/></svg>';
+  lastTimestamp = performance.now();
+  gameState.animFrame = requestAnimationFrame(gameLoop);
+  document.getElementById('word-input').focus();
+}
+
+// ===================== SHOW MENU =====================
+function showMenu() {
+  gameState.active = false;
+  gameState.paused = false;
+  cancelAnimationFrame(gameState.animFrame);
+  clearInterval(gameState.timerInterval);
+
+  document.getElementById('game-canvas').querySelectorAll('.falling-word').forEach(e => e.remove());
+  document.getElementById('hud').style.display = 'none';
+  document.getElementById('input-area').style.display = 'none';
+  document.getElementById('pause-btn').classList.remove('visible');
+  document.getElementById('settings-fab').classList.remove('visible');
+  document.getElementById('combo-bar').classList.remove('visible');
+  document.getElementById('ig-leaderboard').classList.remove('visible');
+  document.getElementById('timer-bar-container').style.display = 'none';
+  document.getElementById('pause-panel').style.display = 'none';
+  document.getElementById('gameover-panel').style.display = 'none';
+  document.getElementById('ig-settings-panel').style.display = 'none';
+  document.getElementById('menu-panel').style.display = 'flex';
+}
+
+// ===================== IN-GAME LEADERBOARD =====================
+async function loadIgLeaderboard() {
+  const list = document.getElementById('ig-lb-list');
+  if (!window.supabaseClient) {
+    list.innerHTML = '<div style="font-size:11px;color:#9ca3af;text-align:center;padding:8px 0;">Нет данных</div>';
+    return;
+  }
+  try {
+    const { data, error } = await window.supabaseClient
+      .from('players')
+      .select('username, best_score')
+      .order('best_score', { ascending: false })
+      .limit(8);
+    if (error || !data || data.length === 0) {
+      list.innerHTML = '<div style="font-size:11px;color:#9ca3af;text-align:center;padding:8px 0;">Нет данных</div>';
+      return;
+    }
+    list.innerHTML = data.map((p, i) => {
+      const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+      const isMe = currentPlayer.name && p.username === currentPlayer.name;
+      return `<div class="ig-lb-row">
+        <span class="ig-lb-rank ${rankClass}">${i + 1}</span>
+        <span class="ig-lb-name${isMe ? ' me' : ''}">${p.username}</span>
+        <span class="ig-lb-score">${p.best_score.toLocaleString()}</span>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    list.innerHTML = '<div style="font-size:11px;color:#9ca3af;text-align:center;padding:8px 0;">Ошибка</div>';
+  }
+}
+
+// ===================== SAVE ON EXIT =====================
+function saveIfActive() {
+  if (!gameState.active || gameState.score === 0 || !currentPlayer.name) return;
+  saveScoreToSupabase();
+}
+
+window.addEventListener('beforeunload', saveIfActive);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') saveIfActive();
+});
+
+// ===================== INPUT EVENTS =====================
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('Page loaded, initializing...');
+  applyTheme();
+  
+  // Initialize Supabase with delay to ensure library is loaded
+  setTimeout(() => {
+    try {
+      initSupabase();
+    } catch (err) {
+      console.error('Supabase init error:', err);
+    }
+  }, 100);
+  
+  const input = document.getElementById('word-input');
+  input.addEventListener('input', handleInput);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') togglePause();
+    if (gameState.active && !gameState.paused && e.key.length === 1) playSound('type');
+  });
+
+  // Prevent losing focus during game
+  input.addEventListener('blur', () => {
+    if (gameState.active && !gameState.paused) {
+      setTimeout(() => input.focus(), 50);
+    }
+  });
+
+  // Space to start from menu
+  document.addEventListener('keydown', (e) => {
+    if (e.key === ' ' && !gameState.active &&
+        document.getElementById('menu-panel').style.display !== 'none') {
+      e.preventDefault();
+      startGame();
+    }
+    if (e.key === 'Escape' && gameState.active) togglePause();
+  });
+
+  // Sync in-game speed buttons on open
+  document.getElementById('ig-speed-group').querySelectorAll('.btn-opt').forEach(b => {
+    if (b.dataset.val === settings.speed) b.classList.add('active', activeClassMap['speed']);
+  });
+});
+</script>
+
+
+</body></html>
